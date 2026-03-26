@@ -228,10 +228,27 @@ export default function Home() {
                           <button onClick={() => handleDeleteProject(p.id)} className="text-xs px-2 py-1 rounded text-red-500" style={{ background: 'var(--bg-secondary)' }}>🗑️</button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 mb-3">
+                      <div className="flex items-center gap-2 mb-3 flex-wrap">
                         <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>{p.type}</span>
                         {p.value > 0 && <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>${p.value.toLocaleString()}</span>}
+                        {(p as any)._intakeSource && (
+                          <span className="text-xs px-2 py-0.5 rounded font-medium" style={{ background: '#dbeafe', color: '#1d4ed8' }}>
+                            📝 Client Intake
+                          </span>
+                        )}
                       </div>
+
+                      {(p as any)._intakeRef && (
+                        <div className="text-xs mb-2 font-mono px-2 py-1 rounded" style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>
+                          🔗 {(p as any)._intakeRef}
+                        </div>
+                      )}
+
+                      {(p as any)._clientEmail && (
+                        <div className="text-xs mb-2" style={{ color: 'var(--text-secondary)' }}>
+                          📧 {(p as any)._clientEmail} {(p as any)._clientPhone ? `• 📱 ${(p as any)._clientPhone}` : ''}
+                        </div>
+                      )}
 
                       {/* Quick status change buttons */}
                       <div className="flex gap-1 mb-3" onClick={e => e.stopPropagation()}>
@@ -319,6 +336,19 @@ export default function Home() {
               {activeProject.statusReason && activeProject.projectStatus === 'declined' && (
                 <div className="text-sm mt-2 italic" style={{ color: 'var(--error)' }}>
                   💬 Decline reason: {activeProject.statusReason}
+                </div>
+              )}
+              {(activeProject as any)._intakeSource && (
+                <div className="mt-3 p-3 rounded-lg text-sm" style={{ background: '#eff6ff', borderLeft: '3px solid #3b82f6' }}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-semibold" style={{ color: '#1d4ed8' }}>📝 Submitted via Client Intake Form</span>
+                  </div>
+                  <div className="text-xs space-y-1" style={{ color: '#1e40af' }}>
+                    <div>🔗 Reference: <span className="font-mono font-medium">{(activeProject as any)._intakeRef}</span></div>
+                    {(activeProject as any)._clientEmail && <div>📧 {(activeProject as any)._clientEmail} {(activeProject as any)._clientPhone ? `• 📱 ${(activeProject as any)._clientPhone}` : ''}</div>}
+                    {(activeProject as any)._budgetEstimate > 0 && <div>💰 AI Budget Estimate: ${(activeProject as any)._budgetEstimate.toLocaleString()}</div>}
+                    {(activeProject as any)._scopeOfWork && <div>📋 Scope: {(activeProject as any)._scopeOfWork.substring(0, 200)}{(activeProject as any)._scopeOfWork.length > 200 ? '...' : ''}</div>}
+                  </div>
                 </div>
               )}
               <div className="flex items-center gap-2 mt-3 flex-wrap">
