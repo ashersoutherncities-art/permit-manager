@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import { Project, ProjectType } from './types';
+import { Project, ProjectType, ProjectStatus } from './types';
 import { loadProjects, saveProjects, createProject } from './store';
 import ThemeToggle from './components/ThemeToggle';
 import ProjectForm from './components/ProjectForm';
@@ -10,9 +10,12 @@ import DocumentPanel from './components/DocumentPanel';
 import ComplianceDashboard from './components/ComplianceDashboard';
 import TimelinePanel from './components/TimelinePanel';
 import StatusBadge from './components/StatusBadge';
+import ProjectStatusBadge from './components/ProjectStatusBadge';
+import PermitTabs from './components/PermitTabs';
 
 type View = 'dashboard' | 'project' | 'compliance';
 type ProjectTab = 'permits' | 'subs' | 'docs' | 'timeline';
+type StatusFilter = 'all' | 'active' | 'potential' | 'declined';
 
 export default function Home() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -22,6 +25,7 @@ export default function Home() {
   const [showNewProject, setShowNewProject] = useState(false);
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<ProjectStatus>('active');
 
   useEffect(() => { setProjects(loadProjects()); }, []);
 
@@ -32,17 +36,28 @@ export default function Home() {
 
   const activeProject = projects.find(p => p.id === activeProjectId);
 
-  const handleCreateProject = (name: string, address: string, type: ProjectType, value: number) => {
-    const project = createProject(name, address, type, value);
+  const statusCounts: Record<ProjectStatus, number> = {
+    active: projects.filter(p => p.projectStatus === 'active').length,
+    potential: projects.filter(p => p.projectStatus === 'potential').length,
+    declined: projects.filter(p => p.projectStatus === 'declined').length,
+  };
+
+  const handleCreateProject = (name: string, address: string, type: ProjectType, value: number, status: ProjectStatus, reason: string) => {
+    const project = createProject(name, address, type, value, status, reason);
     save([...projects, project]);
     setShowNewProject(false);
     setActiveProjectId(project.id);
     setView('project');
   };
 
-  const handleEditProject = (name: string, address: string, type: ProjectType, value: number) => {
+  const handleEditProject = (name: string, address: string, type: ProjectType, value: number, status: ProjectStatus, reason: string) => {
     if (!editProject) return;
-    save(projects.map(p => p.id === editProject.id ? { ...p, name, address, type, value } : p));
+    save(projects.map(p => p.id === editProject.id ? {
+      ...p, name, address, type, value,
+      projectStatus: status,
+      statusDate: status !== editProject.projectStatus ? new Date().toISOString() : p.statusDate,
+      statusReason: reason,
+    } : p));
     setEditProject(null);
   };
 
@@ -50,6 +65,15 @@ export default function Home() {
     if (!confirm('Delete this project and all its data?')) return;
     save(projects.filter(p => p.id !== id));
     if (activeProjectId === id) { setView('dashboard'); setActiveProjectId(null); }
+  };
+
+  const handleChangeStatus = (id: string, newStatus: ProjectStatus, reason?: string) => {
+    save(projects.map(p => p.id === id ? {
+      ...p,
+      projectStatus: newStatus,
+      statusDate: new Date().toISOString(),
+      statusReason: reason || p.statusReason,
+    } : p));
   };
 
   const updateProject = (id: string, updates: Partial<Project>) => {
@@ -68,10 +92,12 @@ export default function Home() {
     return total > 0 ? Math.round((done / total) * 100) : 0;
   };
 
-  const filteredProjects = projects.filter(p =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.address.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredProjects = projects
+    .filter(p => p.projectStatus === statusFilter)
+    .filter(p =>
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.address.toLowerCase().includes(search.toLowerCase())
+    );
 
   return (
     <div className="min-h-screen">
@@ -102,8 +128,44 @@ export default function Home() {
         {/* Dashboard View */}
         {view === 'dashboard' && (
           <div className="space-y-4">
+            {/* Status Summary Cards */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="card text-center cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setStatusFilter('active')} style={statusFilter === 'active' ? { borderColor: '#059669', borderWidth: '2px' } : {}}>
+                <div className="text-3xl font-bold" style={{ color: '#059669' }}>{statusCounts.active}</div>
+                <div className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>🟢 Active</div>
+              </div>
+              <div className="card text-center cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setStatusFilter('potential')} style={statusFilter === 'potential' ? { borderColor: '#d97706', borderWidth: '2px' } : {}}>
+                <div className="text-3xl font-bold" style={{ color: '#d97706' }}>{statusCounts.potential}</div>
+                <div className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>🟡 Potential</div>
+              </div>
+              <div className="card text-center cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setStatusFilter('declined')} style={statusFilter === 'declined' ? { borderColor: '#dc2626', borderWidth: '2px' } : {}}>
+                <div className="text-3xl font-bold" style={{ color: '#dc2626' }}>{statusCounts.declined}</div>
+                <div className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>🔴 Declined</div>
+              </div>
+            </div>
+
+            {/* Potential Permits Alert */}
+            {statusCounts.potential > 0 && statusFilter !== 'potential' && (
+              <div className="card flex items-center gap-3" style={{ background: '#fef3c7', borderColor: '#fbbf24' }}>
+                <span className="text-2xl">⚡</span>
+                <div>
+                  <div className="font-semibold" style={{ color: '#92400e' }}>{statusCounts.potential} Potential Permit{statusCounts.potential > 1 ? 's' : ''} Awaiting Review</div>
+                  <div className="text-sm" style={{ color: '#a16207' }}>
+                    <button onClick={() => setStatusFilter('potential')} className="underline font-medium">View queue →</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Status Filter Tabs */}
+            <PermitTabs activeTab={statusFilter} onTabChange={setStatusFilter} counts={statusCounts} />
+
             <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-              <h2 className="text-2xl font-bold">Projects</h2>
+              <h2 className="text-2xl font-bold">
+                {statusFilter === 'active' && 'Active Projects'}
+                {statusFilter === 'potential' && 'Potential / Queue'}
+                {statusFilter === 'declined' && 'Declined Projects'}
+              </h2>
               <div className="flex gap-2 w-full sm:w-auto">
                 <input
                   className="input flex-1 sm:w-64"
@@ -125,15 +187,25 @@ export default function Home() {
               <ProjectForm
                 onSubmit={handleEditProject}
                 onCancel={() => setEditProject(null)}
-                initial={{ name: editProject.name, address: editProject.address, type: editProject.type, value: editProject.value }}
+                initial={{ name: editProject.name, address: editProject.address, type: editProject.type, value: editProject.value, status: editProject.projectStatus, reason: editProject.statusReason }}
               />
             )}
 
             {filteredProjects.length === 0 && !showNewProject ? (
               <div className="card text-center py-12">
-                <div className="text-4xl mb-3">🏗️</div>
-                <h3 className="text-lg font-semibold mb-1">No projects yet</h3>
-                <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>Create your first project to start tracking permits.</p>
+                <div className="text-4xl mb-3">
+                  {statusFilter === 'active' && '🏗️'}
+                  {statusFilter === 'potential' && '📋'}
+                  {statusFilter === 'declined' && '🚫'}
+                </div>
+                <h3 className="text-lg font-semibold mb-1">
+                  No {statusFilter === 'active' ? 'active' : statusFilter === 'potential' ? 'potential' : 'declined'} projects
+                </h3>
+                <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
+                  {statusFilter === 'active' && 'Create a new project or move a potential project to active.'}
+                  {statusFilter === 'potential' && 'No projects awaiting review. All clear!'}
+                  {statusFilter === 'declined' && 'No declined projects.'}
+                </p>
                 <button onClick={() => setShowNewProject(true)} className="btn-primary">Create Project</button>
               </div>
             ) : (
@@ -145,7 +217,10 @@ export default function Home() {
                     <div key={p.id} className="card cursor-pointer hover:shadow-lg transition-shadow" onClick={() => openProject(p.id)}>
                       <div className="flex items-start justify-between mb-2">
                         <div>
-                          <h3 className="font-bold">{p.name}</h3>
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="font-bold">{p.name}</h3>
+                            <ProjectStatusBadge status={p.projectStatus} reason={p.statusReason} />
+                          </div>
                           <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{p.address}</p>
                         </div>
                         <div className="flex gap-1" onClick={e => e.stopPropagation()}>
@@ -157,6 +232,29 @@ export default function Home() {
                         <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>{p.type}</span>
                         {p.value > 0 && <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>${p.value.toLocaleString()}</span>}
                       </div>
+
+                      {/* Quick status change buttons */}
+                      <div className="flex gap-1 mb-3" onClick={e => e.stopPropagation()}>
+                        {p.projectStatus !== 'active' && (
+                          <button onClick={() => handleChangeStatus(p.id, 'active')} className="text-xs px-2 py-1 rounded font-medium" style={{ background: '#d1fae5', color: '#059669' }}>→ Active</button>
+                        )}
+                        {p.projectStatus !== 'potential' && (
+                          <button onClick={() => handleChangeStatus(p.id, 'potential')} className="text-xs px-2 py-1 rounded font-medium" style={{ background: '#fef3c7', color: '#d97706' }}>→ Queue</button>
+                        )}
+                        {p.projectStatus !== 'declined' && (
+                          <button onClick={() => {
+                            const r = prompt('Reason for declining (optional):');
+                            handleChangeStatus(p.id, 'declined', r || '');
+                          }} className="text-xs px-2 py-1 rounded font-medium" style={{ background: '#fee2e2', color: '#dc2626' }}>→ Decline</button>
+                        )}
+                      </div>
+
+                      {p.statusReason && p.projectStatus === 'declined' && (
+                        <div className="text-xs mb-2 italic" style={{ color: 'var(--error)' }}>
+                          💬 {p.statusReason}
+                        </div>
+                      )}
+
                       <div className="flex items-center gap-2 text-xs mb-2" style={{ color: 'var(--text-secondary)' }}>
                         <span>{p.permits.length} permits</span>
                         <span>•</span>
@@ -194,17 +292,42 @@ export default function Home() {
             <div className="card">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
-                  <h2 className="text-xl font-bold">{activeProject.name}</h2>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h2 className="text-xl font-bold">{activeProject.name}</h2>
+                    <ProjectStatusBadge status={activeProject.projectStatus} reason={activeProject.statusReason} />
+                  </div>
                   <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{activeProject.address} • {activeProject.type} • ${activeProject.value.toLocaleString()}</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  {activeProject.permits.map(p => (
-                    <div key={p.id} className="text-center">
-                      <StatusBadge status={p.status} />
-                      <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>{p.type}</div>
-                    </div>
-                  ))}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Quick status change in detail view */}
+                  <div className="flex gap-1">
+                    {activeProject.projectStatus !== 'active' && (
+                      <button onClick={() => handleChangeStatus(activeProject.id, 'active')} className="text-xs px-2 py-1 rounded font-medium" style={{ background: '#d1fae5', color: '#059669' }}>→ Active</button>
+                    )}
+                    {activeProject.projectStatus !== 'potential' && (
+                      <button onClick={() => handleChangeStatus(activeProject.id, 'potential')} className="text-xs px-2 py-1 rounded font-medium" style={{ background: '#fef3c7', color: '#d97706' }}>→ Queue</button>
+                    )}
+                    {activeProject.projectStatus !== 'declined' && (
+                      <button onClick={() => {
+                        const r = prompt('Reason for declining (optional):');
+                        handleChangeStatus(activeProject.id, 'declined', r || '');
+                      }} className="text-xs px-2 py-1 rounded font-medium" style={{ background: '#fee2e2', color: '#dc2626' }}>→ Decline</button>
+                    )}
+                  </div>
                 </div>
+              </div>
+              {activeProject.statusReason && activeProject.projectStatus === 'declined' && (
+                <div className="text-sm mt-2 italic" style={{ color: 'var(--error)' }}>
+                  💬 Decline reason: {activeProject.statusReason}
+                </div>
+              )}
+              <div className="flex items-center gap-2 mt-3 flex-wrap">
+                {activeProject.permits.map(p => (
+                  <div key={p.id} className="text-center">
+                    <StatusBadge status={p.status} />
+                    <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>{p.type}</div>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -268,7 +391,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="border-t mt-12 py-4 text-center text-xs" style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}>
-        Southern Cities Enterprises • Permit Manager v1.0
+        Southern Cities Enterprises • Permit Manager v1.1
       </footer>
     </div>
   );

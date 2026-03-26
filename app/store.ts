@@ -1,5 +1,5 @@
 'use client';
-import { Project, ProjectType, Permit, PermitType, ProjectDocument, DocType, TimelineEvent } from './types';
+import { Project, ProjectType, ProjectStatus, Permit, PermitType, ProjectDocument, DocType, TimelineEvent } from './types';
 
 const STORAGE_KEY = 'permit-manager-data';
 
@@ -28,7 +28,15 @@ export function generateId(): string {
 export function loadProjects(): Project[] {
   if (typeof window === 'undefined') return [];
   const data = localStorage.getItem(STORAGE_KEY);
-  return data ? JSON.parse(data) : [];
+  if (!data) return [];
+  const projects: Project[] = JSON.parse(data);
+  // Migrate old projects without projectStatus
+  return projects.map(p => ({
+    ...p,
+    projectStatus: p.projectStatus || 'active',
+    statusDate: p.statusDate || p.createdAt || new Date().toISOString(),
+    statusReason: p.statusReason || '',
+  }));
 }
 
 export function saveProjects(projects: Project[]) {
@@ -36,7 +44,7 @@ export function saveProjects(projects: Project[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
 }
 
-export function createProject(name: string, address: string, type: ProjectType, value: number): Project {
+export function createProject(name: string, address: string, type: ProjectType, value: number, projectStatus: ProjectStatus = 'potential', statusReason: string = ''): Project {
   const permits: Permit[] = REQUIRED_PERMITS[type].map(pt => ({
     id: generateId(),
     type: pt,
@@ -71,6 +79,9 @@ export function createProject(name: string, address: string, type: ProjectType, 
     id: generateId(),
     name, address, type, value,
     createdAt: new Date().toISOString(),
+    projectStatus,
+    statusDate: new Date().toISOString(),
+    statusReason,
     permits, subcontractors: [], documents, timeline,
   };
 }

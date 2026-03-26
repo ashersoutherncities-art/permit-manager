@@ -1,4 +1,5 @@
 export type PermitStatus = 'Not Started' | 'Submitted' | 'Under Review' | 'Approved' | 'Issued' | 'Closed';
+export type ProjectStatus = 'active' | 'potential' | 'declined';
 export type ProjectType = 'New Construction' | 'Renovation' | 'Addition' | 'Demolition' | 'Commercial Buildout' | 'Residential Rehab';
 export type PermitType = 'Building' | 'Electrical' | 'Mechanical' | 'Plumbing';
 export type DocType = 'Architectural Plans' | 'Electrical Plans' | 'Mechanical Plans' | 'Plumbing Plans' | 'Survey/Perc Test' | 'Lien Agent Document';
@@ -56,6 +57,9 @@ export interface Project {
   type: ProjectType;
   value: number;
   createdAt: string;
+  projectStatus: ProjectStatus;
+  statusDate: string;
+  statusReason: string;
   permits: Permit[];
   subcontractors: Subcontractor[];
   documents: ProjectDocument[];
