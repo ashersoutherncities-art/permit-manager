@@ -2,6 +2,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Project, ProjectType, ProjectStatus } from './types';
 import { loadProjects, saveProjects, createProject } from './store';
+import { useAuth } from './components/AuthContext';
+import LoginPage from './components/LoginPage';
 import ThemeToggle from './components/ThemeToggle';
 import ProjectForm from './components/ProjectForm';
 import PermitPanel from './components/PermitPanel';
@@ -18,6 +20,7 @@ type ProjectTab = 'permits' | 'subs' | 'docs' | 'timeline';
 type StatusFilter = 'all' | 'active' | 'potential' | 'declined';
 
 export default function Home() {
+  const { user, isLoading, isAuthenticated, logout } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [view, setView] = useState<View>('dashboard');
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
@@ -27,12 +30,19 @@ export default function Home() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ProjectStatus>('active');
 
-  useEffect(() => { setProjects(loadProjects()); }, []);
+  // Load projects for current user
+  useEffect(() => {
+    if (!isLoading && user) {
+      setProjects(loadProjects(user.id));
+    }
+  }, [user, isLoading]);
 
   const save = useCallback((updated: Project[]) => {
     setProjects(updated);
-    saveProjects(updated);
-  }, []);
+    if (user) {
+      saveProjects(updated, user.id);
+    }
+  }, [user]);
 
   const activeProject = projects.find(p => p.id === activeProjectId);
 
@@ -99,6 +109,22 @@ export default function Home() {
       p.address.toLowerCase().includes(search.toLowerCase())
     );
 
+  // Show login page if not authenticated
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin">⏳</div>
+          <p>Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
+
   return (
     <div className="min-h-screen">
       {/* Header */}
@@ -113,11 +139,21 @@ export default function Home() {
             </span>
           </div>
           <div className="flex items-center gap-2">
+            <div className="text-sm flex items-center gap-2">
+              <span style={{ color: 'var(--text-secondary)' }}>👤 {user?.name}</span>
+            </div>
             <button
               onClick={() => setView('compliance')}
               className={`btn-secondary text-sm ${view === 'compliance' ? 'ring-2 ring-blue-500' : ''}`}
             >
               🛡️ <span className="hidden sm:inline">Compliance</span>
+            </button>
+            <button
+              onClick={logout}
+              className="btn-secondary text-sm"
+              title="Sign out"
+            >
+              🚪 <span className="hidden sm:inline">Sign Out</span>
             </button>
             <ThemeToggle />
           </div>

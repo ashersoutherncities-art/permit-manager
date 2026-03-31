@@ -3,6 +3,10 @@ import { Project, ProjectType, ProjectStatus, Permit, PermitType, ProjectDocumen
 
 const STORAGE_KEY = 'permit-manager-data';
 
+export function getUserStorageKey(userId: string): string {
+  return `${STORAGE_KEY}-${userId}`;
+}
+
 const DEFAULT_CHECKLIST: Record<PermitType, string[]> = {
   'Building': ['Site plan submitted', 'Structural calculations', 'Foundation inspection', 'Framing inspection', 'Final inspection'],
   'Electrical': ['Panel schedule', 'Load calculations', 'Rough-in inspection', 'Final inspection'],
@@ -25,9 +29,10 @@ export function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 }
 
-export function loadProjects(): Project[] {
+export function loadProjects(userId?: string): Project[] {
   if (typeof window === 'undefined') return [];
-  const data = localStorage.getItem(STORAGE_KEY);
+  const key = userId ? getUserStorageKey(userId) : STORAGE_KEY;
+  const data = localStorage.getItem(key);
   if (!data) return [];
   const projects: Project[] = JSON.parse(data);
   // Migrate old projects without projectStatus
@@ -39,9 +44,10 @@ export function loadProjects(): Project[] {
   }));
 }
 
-export function saveProjects(projects: Project[]) {
+export function saveProjects(projects: Project[], userId?: string) {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+  const key = userId ? getUserStorageKey(userId) : STORAGE_KEY;
+  localStorage.setItem(key, JSON.stringify(projects));
 }
 
 export function createProject(name: string, address: string, type: ProjectType, value: number, projectStatus: ProjectStatus = 'potential', statusReason: string = ''): Project {
